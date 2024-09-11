@@ -1,0 +1,186 @@
+---
+author: Shota Momma
+title: "Data wrangling using tidyr"
+project:
+  type: website
+  output-dir: docs
+---
+
+<style>
+p.note {
+background-color: rgba(255,255,255,0.5);
+padding: 10px;
+border: 1px solid black;
+margin-left: 0px;
+border-radius: 1px;
+font-style: italic;
+}
+</style>
+
+Throughout this course, we will make an extensive use of the programming language *R*. Here we will introduce the basic methods of loading, manipulating, summarizing and visualizing data using the *tidyverse* package, which may make your life a bit easier later on.
+
+# Dataset 
+
+We will use the acceptability norming dataset from Momma \& Yoshida (2023). The sentences like the following were used:
+
+- Which movie did the critic watch and praise? [Across-The-Board movement]
+- Which movie did the critic watch before praising? [Parasitic gap sentences]
+
+The dataset also contains obviously good-sounding and obviously bad-sounding filler sentences of various types.
+
+# Loading data as a 'tibble' object.
+
+The data are stored in csv format, so you need to import them. To do so, you can use the function *read_csv()*. Note that this is different from the *read.csv()* function in base r. the *read_csv* function loads the data in a 'tibble' format, which is a table format often used in the tidyverse framework.
+
+```{r, message=FALSE}
+## install.packages(tidyverse)
+library(tidyverse)
+df <- read_csv("/Users/shota/Documents/Teaching/Fall2024/Statistics/data/ATBvsPG.csv")
+df
+```
+
+A nice feature of a tibble format is that it tells you the type of each column, e.g., <chr> = character, <dbl> = double.
+
+# Manipulating and summarizing data using dplyr
+
+## filter()
+
+The dataset contains both filler and experimental sentences. Let's say you want to create a data frame where the data from filler trials are removed. You can use the *filter()* function. 
+
+```{r}
+df_exp <- df %>% filter(Condition == 'PG' | Condition == 'ATB')
+df_exp
+```
+
+\%\>\% is known as *pipe*, and it is an operator that takes the output of one function and passes it onto another function as an argument. The benefit of using this becomes clear in a minute.
+
+You can also filter the data using a certain numerical threshold. Let's say you want to subset the data so they only acceptability scores lower than 4.
+
+```{r}
+df_exp_low <- df_exp %>% filter(Rating < 4)
+df_exp_low
+```
+
+## select()
+
+Sometimes, you want to remove the columns that you don't need. To do so, you can use the select() function from the *dplyr* package, which is included in the tidyverse package. To remove a column, you can use the '\-' operator. For example, suppose that you don't want to remove the "Sentence" column.
+
+```{r}
+df_clean <- df %>% select(-Sentence)
+df_clean
+```
+
+You can also keep the columns you want by simply telling which column you want to keep.
+
+```{r}
+df_subset <- df %>% select(Subj_ID, Item_ID, Rating)
+df_subset
+```
+
+## group_by() %>% summarize()
+
+Often, you want to compute descriptive statistics separately by condition, by subject, by item, etc. In such cases you can the combinations of two functions: group_by() and summarize(). For instance, you can compute the mean rating by condition.
+
+```{r}
+mean_bycondition <- df %>% group_by(Condition) %>% summarise(mean = mean(Rating))
+mean_bycondition
+```
+
+You can also compute the mean rating by condition by subject.
+
+```{r}
+mean_bycondition_bysubject <- df %>% group_by(Subj_ID, Condition) %>% summarize(mean = mean(Rating))
+mean_bycondition_bysubject
+```
+
+You can also compute various descriptive statistics simultaneously. For example:
+
+```{r}
+descriptive_stats_by_condition <- df %>% group_by(Condition) %>% summarize(mean = mean(Rating), median = median(Rating), sd = sd(Rating), max = max(Rating), min = min(Rating))
+descriptive_stats_by_condition
+```
+
+The benefit of using the pipe operator is that you can chain multiple operations. For instance, you can first filter the dataset and then compute the descriptive statistics.
+
+```{r}
+desc_stats <- df %>% filter(Condition == 'PG' | Condition == 'ATB') %>% group_by(Condition) %>% summarize(mean = mean(Rating))
+desc_stats
+```
+
+## mutate()
+You sometimes want to create a new column by using information in the other columns. In that case, you can use the mutate() function. For instance, suppose that you want to add a column with standardized rating scores (*z-score*, i.e., how many standard deviations away from the mean a value is) by subject. This is often useful when analyzing acceptability judgment data:
+
+```{r}
+df_stan <- df %>% group_by(Subj_ID) %>% mutate(Rating_z = scale(Rating)) 
+df_stan
+```
+
+## define your own function
+
+It is useful to know how to define your own function in R. As an exercise, let's define a function that computes a z-score (that's what the scale() function does).
+
+```{r}
+## equivalently:
+z <- function(vec){
+    (vec - mean(vec))/sd(vec)
+}
+df_stan2 <- df %>% group_by(Subj_ID) %>% mutate(Rating_z = z(Rating)) 
+df_stan2
+```
+
+# Data visualization using ggplot2
+It's always useful to visualize your data to understand what's going on. The tidiverse package comes with a package named ggplot2, and it is a powerful tool for data visualization. There are a whole bunch of things we can do with ggplot2, but we are gonna create two basic types of graphs for now.
+
+Let's first make a histogram. Histograms are pretty useful for visualizing how a variable of interest is distributed, and often, the first thing you want to do with your data is to create the histogram. 
+
+```{r}
+df_exp <- df %>% filter(Condition == 'ATB'| Condition == 'PG')
+
+ggplot(df_exp) + 
+  geom_histogram(aes(x = Rating))
+```
+
+You can also craete two graphs by conditions:
+
+```{r}
+ggplot(df_exp) + 
+  geom_histogram(aes(x = Rating)) +
+  facet_wrap(~Condition)
+```
+
+Sometimes, you may want to look at subject-wise or item-wise distributions. Let's take a look at the distribution of average ratings of the bad filler sentences by subject.
+
+```{r}
+df_subj <- df %>% filter(Condition == 'filler_bad') %>% group_by(Subj_ID) %>% summarize(mean_rating = mean(Rating))
+
+ggplot(df_subj) + 
+  geom_histogram(aes(x = mean_rating))
+```
+
+You may notice that 1 subject didn't really judge bad fillers as bad. This may be a signal that that person didn't really pay attention to the task. Generally, plotting distributions is very useful for noticing something odd in your data.
+
+Another widely used type of plots are bar plots. Barplots can be created by using the geom_barplot() function. Say you want to plot the mean ratings of each condition.
+
+```{r}
+df$Condition <- factor(df$Condition, levels = c("ATB","PG", "filler_good", "filler_bad") ) # let's reorder the factor
+df_means <- df %>% group_by(Condition) %>% summarize(mean_rating = mean(Rating))
+
+ggplot(df_means, aes(x = Condition,y = mean_rating)) + geom_bar(stat='identity')
+```
+
+Barplots are useful (especially when you put error bars - we don't put error bars here because computing 'errors' is actually complicated. We will come back to this issue later), but they do not contain any information about how variables are distributed. In some cases, you may want to make a boxplot instead:
+
+```{r}
+df_boxplot <- df %>% group_by(Subj_ID, Condition) %>% summarize(mean_rating = mean(Rating))
+ggplot(df_boxplot) + geom_boxplot(aes(x = Condition,y = mean_rating))
+```
+
+# HW exercise (do this by the next class)
+
+1. Compute the mean and the standard deviation of the z-scored acceptability rating using group_by() %>% summarize(). z-score should be computed for each subject separately.
+
+2. Suppose that you want to identify 'bad' subjects, who did not reliably discriminate between good and bad filler sentences. Using various functions introduced above, create a tibble object that shows mean rating differences between good and bad filler sentences for each subject.
+
+3. Do the same but for each item instead of for each subject.
+
+4. Create a boxplot plotting the acceptability rating by condition, where each data point corresponds to an item (rather than subject) average.
